@@ -160,8 +160,6 @@ function performPhotoUpload({ req, res, eventId, eventRow, skipStatusCheck = fal
             return res.status(400).json({ error: 'No files uploaded' });
         }
 
-        const initialStatus = eventRow.require_moderation ? 'pending' : 'approved';
-
         let filesWithPreviews;
         try {
             filesWithPreviews = await Promise.all(
@@ -174,12 +172,20 @@ function performPhotoUpload({ req, res, eventId, eventRow, skipStatusCheck = fal
                         // Если не удалось создать превью, продолжаем только с оригиналом
                         previewRelative = null;
                     }
-                    return { file, storedRelative, previewRelative };
+                    
+                    return { 
+                        file, 
+                        storedRelative, 
+                        previewRelative
+                    };
                 })
             );
         } catch (err) {
             return res.status(500).json({ error: err.message || 'Failed to generate previews' });
         }
+
+        // Определяем начальный статус: если требуется модерация - ставим pending
+        const initialStatus = eventRow.require_moderation ? 'pending' : 'approved';
 
         // Получаем owner_id события для истории загрузок
         db.get(`SELECT owner_id FROM events WHERE id = ?`, [eventId], (err, eventOwnerRow) => {
