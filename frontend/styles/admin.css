@@ -627,10 +627,39 @@
     color: #1e3c72;
     background: rgba(255,255,255,0.9);
     cursor: pointer;
-    transition: background .15s ease, box-shadow .15s ease;
+    transition: background .15s ease, box-shadow .15s ease, border-color 0.3s ease, color 0.3s ease;
 }
-.btn-small:hover { background: rgba(242,245,255,0.9); box-shadow: 0 6px 14px rgba(30,60,114,0.16); }
-.btn-small + .btn-small { margin-left: 8px; }
+
+.btn-small:hover { 
+    background: rgba(242,245,255,0.9); 
+    box-shadow: 0 6px 14px rgba(30,60,114,0.16); 
+}
+
+.btn-small + .btn-small { 
+    margin-left: 8px; 
+}
+
+/* Темная тема для кнопок "Имя" и "Пароль" */
+[data-theme="dark"] .btn-small {
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .btn-small:hover {
+    background: var(--hover-overlay);
+    box-shadow: 0 6px 14px var(--shadow-sm);
+    border-color: var(--primary-color);
+}
+
+[data-theme="dark"] .btn-small i {
+    color: var(--text-primary);
+    transition: color 0.3s ease;
+}
+
+[data-theme="dark"] .btn-small:hover i {
+    color: var(--primary-color);
+}
 
 .btn-danger {
     background: linear-gradient(135deg, #e14b4b 0%, #b83232 100%);
@@ -1799,13 +1828,37 @@ body.admin-menu-open {
     font-weight: 600;
     cursor: pointer;
     box-shadow: 0 10px 22px rgba(30, 60, 114, 0.15);
-    transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, color 0.3s ease;
 }
 
 .logout-btn:hover {
     background: #f5f7ff;
     transform: translateY(-1px);
     box-shadow: 0 14px 26px rgba(30, 60, 114, 0.18);
+}
+
+/* Темная тема для кнопки выхода */
+[data-theme="dark"] .logout-btn {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    box-shadow: 0 10px 22px var(--shadow-md);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .logout-btn:hover {
+    background: var(--hover-overlay);
+    color: var(--primary-color);
+    box-shadow: 0 14px 26px var(--shadow-lg);
+    border-color: var(--primary-color);
+}
+
+[data-theme="dark"] .logout-btn i {
+    color: var(--text-primary);
+    transition: color 0.3s ease;
+}
+
+[data-theme="dark"] .logout-btn:hover i {
+    color: var(--primary-color);
 }
 .tab-content {
     display: block;

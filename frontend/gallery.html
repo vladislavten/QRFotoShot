@@ -14,30 +14,32 @@
     </div>
     <div class="gallery-backdrop" aria-hidden="true"></div>
     <div class="gallery-branding-overlay" aria-hidden="true"></div>
-    <div class="gallery-container">
-        <div class="gallery-inner">
-        <header class="gallery-header">
-                <div class="event-meta">
-                    <h1 id="eventTitle">Галерея события</h1>
-                    <p id="eventDate" class="event-date"></p>
-                </div>
+    <header class="gallery-header">
+        <div class="gallery-header-inner">
+            <div class="event-meta">
+                <h1 id="eventTitle">Галерея события</h1>
+                <p id="eventDate" class="event-date"></p>
+            </div>
             <div class="gallery-controls">
-                    <button type="button" class="download-all">
-                        <i class="fas fa-download"></i>
-                        Скачать все
-                    </button>
-                    <select class="sort-select" aria-label="Сортировка фотографий">
-                        <option value="mostLiked">Самые популярные</option>
-                        <option value="newest" selected>Сначала новые</option>
+                <button type="button" class="download-all">
+                    <i class="fas fa-download"></i>
+                    Скачать все
+                </button>
+                <select class="sort-select" aria-label="Сортировка фотографий">
+                    <option value="mostLiked">Самые популярные</option>
+                    <option value="newest" selected>Сначала новые</option>
                     <option value="oldest">Сначала старые</option>
                 </select>
-                    <button type="button" id="uploadBtn" class="upload-btn">
-                        <i class="fas fa-upload"></i>
-                        Загрузить фото
-                    </button>
-                    <input type="file" id="fileInput" multiple accept="image/*" hidden>
+                <button type="button" id="uploadBtn" class="upload-btn">
+                    <i class="fas fa-upload"></i>
+                    Загрузить фото
+                </button>
+                <input type="file" id="fileInput" multiple accept="image/*" hidden>
             </div>
-        </header>
+        </div>
+    </header>
+    <div class="gallery-container">
+        <div class="gallery-inner">
         <div class="gallery-status" id="galleryStatusContainer" aria-live="polite">
             <span class="gallery-status-badge" id="galleryStatusBadge"></span>
             <p class="gallery-status-message" id="galleryStatusMessage"></p>

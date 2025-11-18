@@ -2,15 +2,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const BRAND_CONFIG = window.BRAND || {
         short: 'QR',
         names: {
-            ru: 'Фотособорщик',
-            en: 'PhotoShare',
-            kz: 'Фото жинақ'
+            ru: 'QR SHOT',
+            en: 'QR SHOT',
+            kz: 'QR SHOT'
         }
     };
 
     const translations = {
         ru: {
-            brand: BRAND_CONFIG.names.ru || 'Фотособорщик',
+            brand: BRAND_CONFIG.names.ru || 'QR SHOT',
             navAdmin: 'Админ-панель',
             navCreate: 'Создать событие',
             heroMessages: [
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loginEmpty: 'Введите логин и пароль'
         },
         en: {
-            brand: BRAND_CONFIG.names.en || BRAND_CONFIG.names.ru || 'PhotoShare',
+            brand: BRAND_CONFIG.names.en || BRAND_CONFIG.names.ru || 'QR SHOT',
             navAdmin: 'Admin panel',
             navCreate: 'Create event',
             heroMessages: [
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loginEmpty: 'Enter username and password'
         },
         kz: {
-            brand: BRAND_CONFIG.names.kz || BRAND_CONFIG.names.ru || 'Фото жинақ',
+            brand: BRAND_CONFIG.names.kz || BRAND_CONFIG.names.ru || 'QR SHOT',
             navAdmin: 'Әкімшілік панель',
             navCreate: 'Іс-шара құру',
             heroMessages: [

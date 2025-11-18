@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
             key: 'live',
             badge: 'В эфире',
             badgeClass: 'gallery-status-badge--live',
-            message: '🟢 Мероприятие в эфире. Можно загружать фотографии.',
+            message: '🟢 Можно загружать фотографии.',
             disableUpload: false,
             uploadHint: ''
         },
@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
             key: 'paused',
             badge: 'Пауза',
             badgeClass: 'gallery-status-badge--paused',
-            message: '⏸ Мероприятие на паузе. Загрузка фотографий временно недоступна.',
+            message: '⏸ Загрузка фотографий временно недоступна.',
             disableUpload: true,
             uploadHint: 'Мероприятие на паузе. Загрузка временно недоступна.'
         },
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
             key: 'ended',
             badge: 'Завершено',
             badgeClass: 'gallery-status-badge--ended',
-            message: '🏁 Мероприятие завершено. Загрузка фотографий больше недоступна.',
+            message: '🏁 Загрузка фотографий больше недоступна.',
             disableUpload: true,
             uploadHint: 'Мероприятие завершено. Загрузка недоступна.'
         }
@@ -431,11 +431,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function applyGalleryBranding(color, backgroundUrl) {
+        // На странице галереи применяем только цвет из "Цветовая схема"
+        // Загруженный фон (backgroundUrl) игнорируется и применяется только на QR странице
         document.body.classList.remove('has-branding-color', 'has-branding-image');
-        if (backgroundUrl && backgroundUrl.trim()) {
-            document.body.classList.add('has-branding-image');
-            document.body.style.background = `url("${backgroundUrl}") center / cover no-repeat fixed`;
-        } else if (color && color.trim()) {
+        if (color && color.trim()) {
             document.body.classList.add('has-branding-color');
             document.body.style.background = color.trim();
         } else {
