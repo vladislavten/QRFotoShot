@@ -229,7 +229,7 @@ router.post('/', auth, async (req, res) => {
     const date = body.date;
     const description = body.description;
     const startTime = body.startTime ?? body.time ?? body.start_time;
-    const defaultBrandingColor = '#f5f5f5';
+    const defaultBrandingColor = '#000000'; //цвет фона по умолчанию для фона при создании события
     const scheduledStartAt = combineDateAndTime(date, startTime);
     const autoEndAt = null;
     
