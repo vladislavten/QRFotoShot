@@ -1,7 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     const photosGrid = document.getElementById('photosGrid');
+    const videosGrid = document.getElementById('videosGrid');
     const modal = document.getElementById('photoModal');
     const modalImage = document.getElementById('modalImage');
+    const modalVideo = document.getElementById('modalVideo');
     const headerTitle = document.getElementById('eventTitle');
     const headerDate = document.getElementById('eventDate');
     const modalLikeBtn = document.getElementById('modalLikeBtn');
@@ -10,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const shareToggleBtn = document.getElementById('modalShareToggle');
     const downloadBtn = document.getElementById('modalDownloadBtn');
     const uploadBtn = document.getElementById('uploadBtn');
+    const uploadBtnText = document.getElementById('uploadBtnText');
     const fileInput = document.getElementById('fileInput');
     const sortSelect = document.querySelector('.sort-select');
     const downloadAllBtn = document.querySelector('.download-all');
@@ -21,8 +24,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const galleryStatusMessage = document.getElementById('galleryStatusMessage');
     const galleryLoader = document.getElementById('galleryLoader');
     const scrollSentinel = document.getElementById('galleryScrollSentinel');
+    const photoTab = document.getElementById('photoTab');
+    const videoTab = document.getElementById('videoTab');
     let currentPhotoIndex = 0;
     let photos = [];
+    let videos = [];
+    let currentTab = 'photo'; // 'photo' или 'video'
+    let videoPlayCount = 0; // Счетчик воспроизведений видео
+    const MAX_VIDEO_PLAYS = 5; // Максимальное количество воспроизведений
     let isAdmin = false;
     let isUploading = false;
     let uploadProgress = 0;
@@ -143,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateModalLikeDisplay() {
         if (!modalLikeBtn || !modalLikeCount) return;
-        const current = photos[currentPhotoIndex];
+        const current = currentTab === 'photo' ? photos[currentPhotoIndex] : videos[currentPhotoIndex];
         if (!current) return;
         modalLikeCount.textContent = current.likes || 0;
     }
@@ -528,11 +537,55 @@ document.addEventListener('DOMContentLoaded', () => {
         stopActiveTracking(true);
     });
 
+    // Переключение вкладок
+    function switchTab(tab) {
+        currentTab = tab;
+        
+        // Обновляем активную вкладку
+        if (photoTab && videoTab) {
+            photoTab.classList.toggle('active', tab === 'photo');
+            videoTab.classList.toggle('active', tab === 'video');
+        }
+        
+        // Показываем/скрываем соответствующие контейнеры
+        if (photosGrid && videosGrid) {
+            photosGrid.style.display = tab === 'photo' ? '' : 'none';
+            videosGrid.style.display = tab === 'video' ? '' : 'none';
+        }
+        
+        // Обновляем текст кнопки загрузки
+        if (uploadBtnText) {
+            uploadBtnText.textContent = tab === 'photo' ? 'Загрузить фото' : 'Загрузить видео';
+        }
+        
+        // Загружаем данные для выбранной вкладки
+        if (tab === 'photo') {
+            if (photos.length === 0) {
+                loadPhotos();
+            } else {
+                renderPhotos(true);
+            }
+        } else {
+            if (videos.length === 0) {
+                loadVideos();
+            } else {
+                renderVideos();
+            }
+        }
+    }
+    
+    if (photoTab) {
+        photoTab.addEventListener('click', () => switchTab('photo'));
+    }
+    if (videoTab) {
+        videoTab.addEventListener('click', () => switchTab('video'));
+    }
+
     async function loadPhotos() {
         const eventId = getEventIdFromLocation();
         if (!eventId) return;
         try {
-            const res = await fetch(`${API_CONFIG.baseUrl}/photos/event/${encodeURIComponent(eventId)}?sort=likes`);
+            const res = await fetch(`${API_CONFIG.baseUrl}/photos/event/${encodeURIComponent(eventId)}?sort=likes&media_type=photo`);
             const data = await res.json();
             const apiOrigin = API_CONFIG.baseUrl.replace(/\/api\/?$/, '');
             function toAbsoluteUrl(u) {
@@ -559,6 +612,156 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPhotos();
         } catch (_) {
             // noop
+        }
+    }
+
+    async function loadVideos() {
+        const eventId = getEventIdFromLocation();
+        if (!eventId) return;
+        try {
+            const res = await fetch(`${API_CONFIG.baseUrl}/photos/event/${encodeURIComponent(eventId)}?sort=likes&media_type=video`);
+            const data = await res.json();
+            const apiOrigin = API_CONFIG.baseUrl.replace(/\/api\/?$/, '');
+            function toAbsoluteUrl(u) {
+                if (!u) return '';
+                if (/^https?:\/\//i.test(u)) return u;
+                const path = String(u).startsWith('/') ? u : `/${u}`;
+                return `${apiOrigin}${path}`;
+            }
+            videos = (Array.isArray(data) ? data : []).map(v => {
+                const url = toAbsoluteUrl(v.url || v.filename);
+                return {
+                    id: v.id,
+                    url: url,
+                    date: v.uploaded_at,
+                    likes: v.likes || 0,
+                    original_name: v.original_name
+                };
+            });
+            renderVideos();
+        } catch (_) {
+            // noop
+        }
+    }
+
+    function renderVideos() {
+        if (!videosGrid) return;
+        videosGrid.innerHTML = '';
+        
+        if (videos.length === 0) {
+            videosGrid.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Видео пока нет</p>';
+            return;
+        }
+        
+        videos.forEach((video, index) => {
+            const videoItem = document.createElement('div');
+            videoItem.className = 'video-item';
+            videoItem.dataset.videoId = video.id;
+            videoItem.dataset.videoIndex = index;
+            
+            const videoEl = document.createElement('video');
+            videoEl.src = video.url;
+            videoEl.preload = 'metadata';
+            videoEl.muted = true;
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'video-overlay';
+            
+            const playIcon = document.createElement('div');
+            playIcon.className = 'play-icon';
+            playIcon.innerHTML = '<i class="fas fa-play"></i>';
+            overlay.appendChild(playIcon);
+            
+            const likesEl = document.createElement('div');
+            likesEl.className = 'video-likes';
+            likesEl.innerHTML = `<i class="fas fa-heart"></i> ${video.likes || 0}`;
+            
+            videoItem.appendChild(videoEl);
+            videoItem.appendChild(overlay);
+            videoItem.appendChild(likesEl);
+            
+            // Добавляем кнопку удаления для админов
+            if (isAdmin) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-video-btn';
+                deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+                deleteBtn.title = 'Удалить видео';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation(); // Предотвращаем открытие модального окна
+                    deleteVideo(video.id, index);
+                };
+                videoItem.appendChild(deleteBtn);
+            }
+            
+            videoItem.addEventListener('click', () => {
+                openVideoModal(video);
+            });
+            
+            videosGrid.appendChild(videoItem);
+        });
+    }
+
+    function openVideoModal(video) {
+        if (!modal || !modalVideo) return;
+        
+        // Сбрасываем счетчик воспроизведений при открытии нового видео
+        videoPlayCount = 0;
+        
+        // Скрываем изображение, показываем видео
+        if (modalImage) modalImage.style.display = 'none';
+        modalVideo.style.display = 'block';
+        
+        modalVideo.src = video.url;
+        modalVideo.loop = false; // Отключаем стандартный loop
+        modalVideo.load();
+        
+        // Удаляем старые обработчики события ended, если они есть
+        modalVideo.removeEventListener('ended', handleVideoEnd);
+        
+        // Добавляем обработчик окончания видео
+        modalVideo.addEventListener('ended', handleVideoEnd);
+        
+        // Обновляем счетчик лайков
+        if (modalLikeCount) {
+            modalLikeCount.textContent = video.likes || 0;
+        }
+        
+        // Обновляем индекс для навигации
+        currentPhotoIndex = videos.findIndex(v => v.id === video.id);
+        
+        modal.style.display = 'block';
+        modal.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+        
+        // Обновляем кнопки навигации
+        if (navPrev) {
+            navPrev.style.display = currentPhotoIndex > 0 ? 'block' : 'none';
+        }
+        if (navNext) {
+            navNext.style.display = currentPhotoIndex < videos.length - 1 ? 'block' : 'none';
+        }
+        
+        // Воспроизводим видео
+        modalVideo.play().catch(() => {
+            // Игнорируем ошибки автовоспроизведения
+        });
+    }
+    
+    function handleVideoEnd() {
+        if (!modalVideo) return;
+        
+        videoPlayCount++;
+        
+        if (videoPlayCount < MAX_VIDEO_PLAYS) {
+            // Перезапускаем видео
+            modalVideo.currentTime = 0;
+            modalVideo.play().catch(() => {
+                // Игнорируем ошибки автовоспроизведения
+            });
+        } else {
+            // После 5 воспроизведений останавливаем видео
+            modalVideo.pause();
+            videoPlayCount = 0; // Сбрасываем счетчик
         }
     }
 
@@ -659,12 +862,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <img src="${photo.url}" alt="Фото ${actualIndex + 1}" loading="lazy">
                         <div class="photo-overlay"></div>
                     </div>
-                    <div class="photo-actions">
-                        <span class="like-photo-btn" title="Количество лайков">
-                            ❤️ <span>${photo.likes || 0}</span>
-                        </span>
-                        ${isAdmin ? `<button class="delete-photo-btn" onclick="deletePhoto(${photo.id}, ${actualIndex})" title="Удалить фото"><i class="fas fa-trash"></i></button>` : ''}
+                    <div class="photo-likes">
+                        <i class="fas fa-heart"></i> ${photo.likes || 0}
                     </div>
+                    ${isAdmin ? `<div class="photo-actions"><button class="delete-photo-btn" onclick="deletePhoto(${photo.id}, ${actualIndex})" title="Удалить фото"><i class="fas fa-trash"></i></button></div>` : ''}
                 </div>
             `;
         }).join('');
@@ -704,38 +905,101 @@ document.addEventListener('DOMContentLoaded', () => {
     window.openPhoto = (index) => {
         currentPhotoIndex = index;
         const photo = photos[index];
-        modalImage.src = photo.originalUrl || photo.url;
-        modal.style.display = 'block';
+        if (!photo) return;
+        
+        // Скрываем видео, показываем изображение
+        if (modalVideo) {
+            modalVideo.pause();
+            modalVideo.src = '';
+            modalVideo.style.display = 'none';
+        }
+        if (modalImage) {
+            modalImage.src = photo.originalUrl || photo.url;
+            modalImage.style.display = 'block';
+        }
+        
+        if (modal) {
+            modal.style.display = 'block';
+            modal.classList.add('is-open');
+        }
+        document.body.style.overflow = 'hidden';
+        
+        // Обновляем кнопки навигации
+        if (navPrev) {
+            navPrev.style.display = currentPhotoIndex > 0 ? 'block' : 'none';
+        }
+        if (navNext) {
+            navNext.style.display = currentPhotoIndex < photos.length - 1 ? 'block' : 'none';
+        }
+        
         updateModalLikeDisplay();
         updateShareButtons(photos[index]);
     };
 
-    // Навигация по фото
-    document.querySelector('.nav-prev').onclick = () => {
-        if (currentPhotoIndex > 0) {
-            openPhoto(currentPhotoIndex - 1);
-        }
-    };
-
-    document.querySelector('.nav-next').onclick = () => {
-        if (currentPhotoIndex < photos.length - 1) {
-            openPhoto(currentPhotoIndex + 1);
-        }
-    };
+    // Навигация по фото/видео
+    const navPrev = document.querySelector('.nav-prev');
+    const navNext = document.querySelector('.nav-next');
+    
+    if (navPrev) {
+        navPrev.onclick = () => {
+            if (currentTab === 'photo') {
+                if (currentPhotoIndex > 0) {
+                    openPhoto(currentPhotoIndex - 1);
+                }
+            } else {
+                if (currentPhotoIndex > 0) {
+                    openVideoModal(videos[currentPhotoIndex - 1]);
+                }
+            }
+        };
+    }
+    
+    if (navNext) {
+        navNext.onclick = () => {
+            if (currentTab === 'photo') {
+                if (currentPhotoIndex < photos.length - 1) {
+                    openPhoto(currentPhotoIndex + 1);
+                }
+            } else {
+                if (currentPhotoIndex < videos.length - 1) {
+                    openVideoModal(videos[currentPhotoIndex + 1]);
+                }
+            }
+        };
+    }
 
     // Закрытие модального окна
-    document.querySelector('.close-modal').onclick = () => {
-        modal.style.display = 'none';
-        clearShareLinks();
-    };
-
-    // Закрытие при клике вне изображения
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
+    const closeModalBtn = document.querySelector('.close-modal');
+    if (closeModalBtn) {
+        closeModalBtn.onclick = () => {
+            if (modalVideo) {
+                modalVideo.pause();
+                modalVideo.src = '';
+            }
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('is-open');
+            }
+            document.body.style.overflow = '';
             clearShareLinks();
-        }
-    });
+        };
+    }
+
+    // Закрытие при клике вне изображения/видео
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                if (modalVideo) {
+                    modalVideo.pause();
+                    modalVideo.src = '';
+                }
+                modal.style.display = 'none';
+                modal.classList.remove('is-open');
+                document.body.style.overflow = '';
+                clearShareLinks();
+            }
+        });
+    }
 
     if (shareButtonsContainer) {
         shareButtonsContainer.addEventListener('click', (e) => {
@@ -763,16 +1027,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (downloadBtn) {
         downloadBtn.addEventListener('click', () => {
-            const photo = photos[currentPhotoIndex];
-            const src = photo?.originalUrl || photo?.url;
-            if (!src) return;
-            const link = document.createElement('a');
-            link.href = src;
-            const filename = photo.original_name || `photo-${photo.id || currentPhotoIndex + 1}.jpg`;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            if (currentTab === 'photo') {
+                const photo = photos[currentPhotoIndex];
+                const src = photo?.originalUrl || photo?.url;
+                if (!src) return;
+                const link = document.createElement('a');
+                link.href = src;
+                const filename = photo.original_name || `photo-${photo.id || currentPhotoIndex + 1}.jpg`;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                const video = videos[currentPhotoIndex];
+                const src = video?.url;
+                if (!src) return;
+                const link = document.createElement('a');
+                link.href = src;
+                const filename = video.original_name || `video-${video.id || currentPhotoIndex + 1}.mp4`;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
         });
     }
 
@@ -799,12 +1076,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const diffY = touchEndY - touchStartY;
 
         if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > SWIPE_THRESHOLD) {
-            if (diffX < 0 && currentPhotoIndex < photos.length - 1) {
-                swipeDirection = 'left';
-                animateSwipe('left', () => openPhoto(currentPhotoIndex + 1));
-            } else if (diffX > 0 && currentPhotoIndex > 0) {
-                swipeDirection = 'right';
-                animateSwipe('right', () => openPhoto(currentPhotoIndex - 1));
+            if (currentTab === 'photo') {
+                if (diffX < 0 && currentPhotoIndex < photos.length - 1) {
+                    swipeDirection = 'left';
+                    animateSwipe('left', () => openPhoto(currentPhotoIndex + 1));
+                } else if (diffX > 0 && currentPhotoIndex > 0) {
+                    swipeDirection = 'right';
+                    animateSwipe('right', () => openPhoto(currentPhotoIndex - 1));
+                }
+            } else {
+                if (diffX < 0 && currentPhotoIndex < videos.length - 1) {
+                    swipeDirection = 'left';
+                    animateSwipe('left', () => openVideoModal(videos[currentPhotoIndex + 1]));
+                } else if (diffX > 0 && currentPhotoIndex > 0) {
+                    swipeDirection = 'right';
+                    animateSwipe('right', () => openVideoModal(videos[currentPhotoIndex - 1]));
+                }
             }
         }
         touchStartX = null;
@@ -852,13 +1139,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const files = Array.from(fileList || []);
         const valid = [];
         const rejected = [];
+        const maxSize = currentTab === 'video' ? 100 * 1024 * 1024 : 10 * 1024 * 1024; // 100MB для видео, 10MB для фото
+        const allowedTypes = currentTab === 'video' 
+            ? ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo']
+            : ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        
         files.forEach(file => {
-            if (!file.type.startsWith('image/')) {
+            const isImage = file.type.startsWith('image/');
+            const isVideo = file.type.startsWith('video/');
+            
+            if (currentTab === 'photo' && !isImage) {
                 rejected.push(`${file.name} — не изображение`);
                 return;
             }
-            if (file.size > 10 * 1024 * 1024) {
-                rejected.push(`${file.name} — больше 10 МБ`);
+            if (currentTab === 'video' && !isVideo) {
+                rejected.push(`${file.name} — не видео`);
+                return;
+            }
+            if (!allowedTypes.includes(file.type)) {
+                rejected.push(`${file.name} — неподдерживаемый формат`);
+                return;
+            }
+            if (file.size > maxSize) {
+                const maxSizeMB = Math.round(maxSize / (1024 * 1024));
+                rejected.push(`${file.name} — больше ${maxSizeMB} МБ`);
                 return;
             }
             valid.push(file);
@@ -885,7 +1189,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const confirmed = confirm('Подтверждаете согласие на обработку выбранных фотографий?');
+            const mediaType = currentTab === 'photo' ? 'фотографий' : 'видео';
+            const confirmed = confirm(`Подтверждаете согласие на обработку выбранных ${mediaType}?`);
             if (!confirmed) {
                 return;
             }
@@ -926,11 +1231,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (_) {}
 
                 if (requiresModeration) {
-                    alert('Фото успешно загружены! Они находятся на модерации и появятся в галерее после одобрения администратором.');
+                    const mediaType = currentTab === 'photo' ? 'Фото' : 'Видео';
+                    alert(`${mediaType} успешно загружены! Они находятся на модерации и появятся в галерее после одобрения администратором.`);
                 } else {
-                    alert('Фото успешно загружены! После обработки они появятся в галерее.');
+                    const mediaType = currentTab === 'photo' ? 'Фото' : 'Видео';
+                    alert(`${mediaType} успешно загружены! После обработки они появятся в галерее.`);
                 }
-                await loadPhotos();
+                if (currentTab === 'photo') {
+                    await loadPhotos();
+                } else {
+                    await loadVideos();
+                }
             } catch (err) {
                 alert(`Ошибка загрузки: ${err.message || err}`);
                 finishUploadProgress(false);
@@ -1003,13 +1314,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Функция удаления видео (только для админа)
+    window.deleteVideo = async (videoId, index) => {
+        if (!confirm('Удалить это видео? Это действие необратимо.')) return;
+        
+        try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                alert('Требуется авторизация администратора');
+                return;
+            }
+
+            const res = await fetch(`${API_CONFIG.baseUrl}/photos/${videoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Не удалось удалить видео');
+            }
+
+            // Удаляем видео из локального массива и перерисовываем
+            videos.splice(index, 1);
+            renderVideos();
+            
+            // Если модальное окно открыто с этим видео, закрываем его
+            if (modal && modal.style.display === 'block' && modalVideo && modalVideo.style.display !== 'none') {
+                const currentVideo = videos[currentPhotoIndex];
+                if (!currentVideo || currentVideo.id === videoId) {
+                    modal.style.display = 'none';
+                    modal.classList.remove('is-open');
+                    document.body.style.overflow = '';
+                    if (modalVideo) {
+                        modalVideo.pause();
+                        modalVideo.src = '';
+                    }
+                }
+            }
+        } catch (err) {
+            alert('Ошибка при удалении: ' + err.message);
+        }
+    };
+
     window.likePhoto = async (event, index, options = {}) => {
         if (event?.stopPropagation) event.stopPropagation();
-        const photo = photos[index];
-        if (!photo) return;
+        if (event?.preventDefault) event.preventDefault();
+        
+        // Определяем, работаем ли мы с фото или видео
+        const isVideo = currentTab === 'video';
+        const mediaArray = isVideo ? videos : photos;
+        const mediaItem = mediaArray[index];
+        
+        if (!mediaItem) return;
+
+        // Сохраняем состояние воспроизведения видео, если оно открыто
+        let wasPlaying = false;
+        let currentTime = 0;
+        if (isVideo && modalVideo && modalVideo.style.display !== 'none') {
+            wasPlaying = !modalVideo.paused;
+            currentTime = modalVideo.currentTime;
+        }
 
         try {
-            const res = await fetch(`${API_CONFIG.baseUrl}/photos/${photo.id}/like`, {
+            const res = await fetch(`${API_CONFIG.baseUrl}/photos/${mediaItem.id}/like`, {
                 method: 'POST'
             });
             if (!res.ok) {
@@ -1017,25 +1385,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(err.error || 'Не удалось поставить лайк');
             }
             const data = await res.json();
-            const newLikes = data.likes ?? ((photo.likes || 0) + 1);
-            photos[index].likes = newLikes;
+            const newLikes = data.likes ?? ((mediaItem.likes || 0) + 1);
+            mediaArray[index].likes = newLikes;
 
-            const currentSort = sortSelect?.value || 'newest';
-            sortPhotos(currentSort);
-
-            const likedPhotoId = photo.id;
-            renderPhotos();
-
-            const newIndex = photos.findIndex(p => p.id === likedPhotoId);
-            if (newIndex !== -1) {
-                if (options.fromModal) {
-                    currentPhotoIndex = newIndex;
-                    const current = photos[currentPhotoIndex];
-                    modalImage.src = current.originalUrl || current.url;
-                    updateModalLikeDisplay();
-                } else if (modal && modal.style.display === 'block' && photos[currentPhotoIndex]?.id === likedPhotoId) {
-                    currentPhotoIndex = newIndex;
-                    updateModalLikeDisplay();
+            // Обновляем только счетчик лайков в модальном окне, без перерисовки всего контента
+            if (options.fromModal || (modal && modal.style.display === 'block')) {
+                updateModalLikeDisplay();
+                
+                // Если это видео и оно было открыто, восстанавливаем воспроизведение
+                if (isVideo && modalVideo && modalVideo.style.display !== 'none') {
+                    if (wasPlaying) {
+                        modalVideo.currentTime = currentTime;
+                        modalVideo.play().catch(() => {
+                            // Игнорируем ошибки автовоспроизведения
+                        });
+                    }
+                }
+            }
+            
+            // Обновляем счетчик лайков в галерее (только для текущего элемента, без перерисовки)
+            if (!isVideo) {
+                // Для фото обновляем только если не в модальном окне
+                if (!options.fromModal) {
+                    const photoItem = photosGrid?.querySelector(`[data-index="${index}"]`);
+                    if (photoItem) {
+                        const likesEl = photoItem.querySelector('.photo-likes');
+                        if (likesEl) {
+                            likesEl.innerHTML = `<i class="fas fa-heart"></i> ${newLikes}`;
+                        }
+                    }
+                }
+            } else {
+                // Для видео обновляем счетчик в галерее
+                const videoItem = videosGrid?.querySelector(`[data-video-id="${mediaItem.id}"]`);
+                if (videoItem) {
+                    const likesEl = videoItem.querySelector('.video-likes');
+                    if (likesEl) {
+                        likesEl.innerHTML = `<i class="fas fa-heart"></i> ${newLikes}`;
+                    }
                 }
             }
         } catch (err) {

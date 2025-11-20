@@ -32,9 +32,9 @@
                 </select>
                 <button type="button" id="uploadBtn" class="upload-btn">
                     <i class="fas fa-upload"></i>
-                    Загрузить фото
+                    <span id="uploadBtnText">Загрузить фото</span>
                 </button>
-                <input type="file" id="fileInput" multiple accept="image/*" hidden>
+                <input type="file" id="fileInput" multiple accept="image/*,video/*" hidden>
             </div>
         </div>
     </header>
@@ -45,8 +45,22 @@
             <p class="gallery-status-message" id="galleryStatusMessage"></p>
         </div>
 
+        <div class="gallery-tabs">
+            <button class="gallery-tab active" data-tab="photo" id="photoTab">
+                <i class="fas fa-images"></i>
+                Фото
+            </button>
+            <button class="gallery-tab" data-tab="video" id="videoTab">
+                <i class="fas fa-video"></i>
+                Видео
+            </button>
+        </div>
+
         <div class="photos-grid" id="photosGrid">
             <!-- Фотографии будут добавляться динамически -->
+        </div>
+        <div class="videos-grid" id="videosGrid" style="display: none;">
+            <!-- Видео будут добавляться динамически -->
         </div>
         <div class="gallery-loader" id="galleryLoader" aria-hidden="true">
             <div class="gallery-loader__spinner" aria-hidden="true"></div>
@@ -59,10 +73,14 @@
     <footer class="footer"></footer>
     <script src="js/footer.js"></script>
 
-    <!-- Модальное окно для просмотра фото -->
+    <!-- Модальное окно для просмотра фото и видео -->
     <div class="photo-modal" id="photoModal">
         <button class="close-modal">&times;</button>
-        <img src="" alt="Просмотр фото" id="modalImage">
+        <img src="" alt="Просмотр фото" id="modalImage" style="display: none;">
+        <video id="modalVideo" controls style="display: none;">
+            <source src="" type="video/mp4">
+            Ваш браузер не поддерживает видео.
+        </video>
         <div class="modal-actions">
             <button class="modal-like-btn" id="modalLikeBtn">
                 ❤️ <span id="modalLikeCount">0</span>

@@ -24,7 +24,7 @@ function dbAll(query, params = []) {
     });
 }
 
-async function calculatePhotosSize(rows) {
+async function calculateMediaSize(rows) {
     let total = 0;
     if (!Array.isArray(rows) || !rows.length) return total;
     await Promise.all(rows.map(async (row) => {
@@ -45,29 +45,41 @@ router.get('/summary', auth, async (req, res) => {
         const isRoot = req.user && req.user.role === 'root';
         let totalEventsRow;
         let photoRows;
+        let videoRows;
         if (isRoot) {
-            [totalEventsRow, photoRows] = await Promise.all([
+            [totalEventsRow, photoRows, videoRows] = await Promise.all([
                 dbGet('SELECT COUNT(*) AS total FROM events'),
-                dbAll('SELECT filename FROM photos')
+                dbAll('SELECT filename FROM photos WHERE media_type IS NULL OR media_type = ?', ['photo']),
+                dbAll('SELECT filename FROM photos WHERE media_type = ?', ['video'])
             ]);
         } else {
             const userId = req.user.userId;
-            [totalEventsRow, photoRows] = await Promise.all([
+            [totalEventsRow, photoRows, videoRows] = await Promise.all([
                 dbGet('SELECT COUNT(*) AS total FROM events WHERE owner_id = ?', [userId]),
                 dbAll(`SELECT p.filename
                        FROM photos p
                        JOIN events e ON e.id = p.event_id
-                       WHERE e.owner_id = ?`, [userId])
+                       WHERE e.owner_id = ? AND (p.media_type IS NULL OR p.media_type = ?)`, [userId, 'photo']),
+                dbAll(`SELECT p.filename
+                       FROM photos p
+                       JOIN events e ON e.id = p.event_id
+                       WHERE e.owner_id = ? AND p.media_type = ?`, [userId, 'video'])
             ]);
         }
 
         const totalEvents = totalEventsRow?.total || 0;
         const totalPhotos = photoRows.length;
-        const totalSizeBytes = await calculatePhotosSize(photoRows);
+        const totalVideos = videoRows.length;
+        const photosSizeBytes = await calculateMediaSize(photoRows);
+        const videosSizeBytes = await calculateMediaSize(videoRows);
+        const totalSizeBytes = photosSizeBytes + videosSizeBytes;
 
         res.json({
             totalEvents,
             totalPhotos,
+            totalVideos,
+            photosSizeBytes,
+            videosSizeBytes,
             totalSizeBytes
         });
     } catch (error) {
@@ -95,10 +107,14 @@ router.get('/uploads-by-day', auth, (req, res) => {
     const params = [startStr, endStr];
     let sql;
     if (isRoot) {
-        // Используем историю загрузок, чтобы видеть все загруженные фото, даже если они удалены
+        // Используем историю загрузок, чтобы видеть все загруженные фото и видео, даже если они удалены
         sql = `
-            SELECT DATE(h.uploaded_at) AS day, COUNT(*) AS total
+            SELECT DATE(h.uploaded_at) AS day,
+                   SUM(CASE WHEN p.media_type = 'video' THEN 1 ELSE 0 END) AS videos,
+                   SUM(CASE WHEN p.media_type IS NULL OR p.media_type = 'photo' THEN 1 ELSE 0 END) AS photos,
+                   COUNT(*) AS total
             FROM photo_uploads_history h
+            LEFT JOIN photos p ON p.id = h.photo_id
             WHERE h.uploaded_at IS NOT NULL
               AND DATE(h.uploaded_at) BETWEEN ? AND ?
             GROUP BY day
@@ -107,8 +123,12 @@ router.get('/uploads-by-day', auth, (req, res) => {
     } else {
         // Для обычных пользователей фильтруем по owner_id
         sql = `
-            SELECT DATE(h.uploaded_at) AS day, COUNT(*) AS total
+            SELECT DATE(h.uploaded_at) AS day,
+                   SUM(CASE WHEN p.media_type = 'video' THEN 1 ELSE 0 END) AS videos,
+                   SUM(CASE WHEN p.media_type IS NULL OR p.media_type = 'photo' THEN 1 ELSE 0 END) AS photos,
+                   COUNT(*) AS total
             FROM photo_uploads_history h
+            LEFT JOIN photos p ON p.id = h.photo_id
             WHERE h.uploaded_at IS NOT NULL
               AND h.owner_id = ?
               AND DATE(h.uploaded_at) BETWEEN ? AND ?
@@ -123,11 +143,21 @@ router.get('/uploads-by-day', auth, (req, res) => {
             return res.status(500).json({ error: err.message });
         }
         // Заполняем пропущенные дни нулями
-        const countsByDay = new Map((rows || []).map(r => [r.day, Number(r.total) || 0]));
+        const countsByDay = new Map((rows || []).map(r => [r.day, {
+            total: Number(r.total) || 0,
+            photos: Number(r.photos) || 0,
+            videos: Number(r.videos) || 0
+        }]));
         const result = [];
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             const ds = toDateStr(d);
-            result.push({ day: ds, total: countsByDay.get(ds) || 0 });
+            const dayData = countsByDay.get(ds) || { total: 0, photos: 0, videos: 0 };
+            result.push({
+                day: ds,
+                total: dayData.total,
+                photos: dayData.photos,
+                videos: dayData.videos
+            });
         }
         res.json(result);
     });

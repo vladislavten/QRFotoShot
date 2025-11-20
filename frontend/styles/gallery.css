@@ -97,6 +97,136 @@ body {
     display: none;
 }
 
+/* Вкладки для переключения между фото и видео */
+.gallery-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 24px 0;
+    border-bottom: 2px solid rgba(42, 82, 152, 0.1);
+    padding-bottom: 0;
+}
+
+.gallery-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: rgba(42, 82, 152, 0.6);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    top: 2px;
+}
+
+.gallery-tab:hover {
+    color: rgba(42, 82, 152, 0.8);
+    background: rgba(42, 82, 152, 0.05);
+}
+
+.gallery-tab.active {
+    color: #2a5298;
+    border-bottom-color: #2a5298;
+    font-weight: 600;
+}
+
+.gallery-tab i {
+    font-size: 18px;
+}
+
+/* Стили для видео в галерее */
+.videos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    width: 100%;
+}
+
+/* Ограничение до 5 колонок в десктоп версии */
+@media (min-width: 1200px) {
+    .videos-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+.video-item {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #000;
+}
+
+.video-item video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.video-item .video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.video-item:hover .video-overlay {
+    opacity: 1;
+}
+
+.video-item .play-icon {
+    width: 64px;
+    height: 64px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2a5298;
+    font-size: 24px;
+}
+
+.video-item .video-likes {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Модальное окно для видео */
+.photo-modal video {
+    max-width: 95%;
+    max-height: 95vh;
+    width: auto;
+    height: auto;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 8px;
+}
+
 @keyframes galleryLoaderPulse {
     0% {
         transform: scaleX(0.2);
@@ -569,10 +699,24 @@ body.has-branding-image {
     opacity: 1;
 }
 
+.photo-item .photo-likes {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .photo-actions {
     position: absolute;
-    left: 16px;
-    bottom: 16px;
+    right: 8px;
+    bottom: 8px;
     display: flex;
     gap: 12px;
 }
@@ -609,6 +753,30 @@ body.has-branding-image {
 }
 
 .delete-photo-btn:hover {
+    transform: translateY(-2px);
+    background: rgba(15, 28, 60, 0.75);
+    box-shadow: 0 14px 26px rgba(15, 28, 60, 0.26);
+}
+
+.delete-video-btn {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(15, 28, 60, 0.6);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    z-index: 10;
+}
+
+.delete-video-btn:hover {
     transform: translateY(-2px);
     background: rgba(15, 28, 60, 0.75);
     box-shadow: 0 14px 26px rgba(15, 28, 60, 0.26);
@@ -684,16 +852,16 @@ body.has-branding-image {
 }
 
 @media (max-width: 768px) {
-    .like-photo-btn {
-        padding: 6px 10px;
-        gap: 6px;
-        font-size: 11px;
-        box-shadow: 0 10px 18px rgba(16, 30, 60, 0.14);
+    .photo-item .photo-likes {
+        bottom: 8px;
+        left: 8px;
+        padding: 4px 8px;
+        font-size: 12px;
     }
 
     .photo-actions {
-        left: 14px;
-        bottom: 14px;
+        right: 8px;
+        bottom: 8px;
     }
 }
 
@@ -783,6 +951,10 @@ body.has-branding-image {
     height: 100%;
     background: rgba(0,0,0,0.9);
     z-index: 1000;
+}
+
+.photo-modal.is-open {
+    display: block;
 }
 
 .photo-modal img {

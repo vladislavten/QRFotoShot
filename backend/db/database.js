@@ -107,6 +107,9 @@ db.serialize(() => {
     db.run(`ALTER TABLE photos ADD COLUMN preview_filename TEXT`, (err) => {
         // Игнорируем ошибку при существующей колонке
     });
+    db.run(`ALTER TABLE photos ADD COLUMN media_type TEXT DEFAULT 'photo'`, (err) => {
+        // Игнорируем ошибку при существующей колонке
+    });
 
     // Удаляем таблицы для распознавания лиц (если они были созданы ранее)
     db.run(`DROP TABLE IF EXISTS face_group_members`, (err) => {

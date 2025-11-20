@@ -1650,7 +1650,8 @@ body.admin-menu-open {
     display: block;
 }
 
-.photo-modal img {
+.photo-modal img,
+.photo-modal video {
     max-width: 90%;
     max-height: 90vh;
     position: absolute;
@@ -1659,6 +1660,10 @@ body.admin-menu-open {
     transform: translate(-50%, -50%);
     box-shadow: 0 10px 40px rgba(0,0,0,0.4);
     border-radius: 12px;
+}
+
+.photo-modal video {
+    background: #000;
 }
 
 .photo-modal .close-modal {
@@ -2165,7 +2170,41 @@ body.admin-menu-open {
     overflow: hidden;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     cursor: pointer;
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    border: 3px solid transparent;
+}
+
+.moderation-item--photo {
+    border-color: #4CAF50;
+}
+
+.moderation-item--video {
+    border-color: #2196F3;
+}
+
+.moderation-media-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 14px;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.moderation-item--photo .moderation-media-badge {
+    background: rgba(76, 175, 80, 0.9);
+}
+
+.moderation-item--video .moderation-media-badge {
+    background: rgba(33, 150, 243, 0.9);
 }
 
 /* Темная тема для карточек фото модерации */
@@ -2174,11 +2213,48 @@ body.admin-menu-open {
     box-shadow: 0 2px 10px var(--shadow-sm);
 }
 
-.moderation-item img {
+[data-theme="dark"] .moderation-item--photo {
+    border-color: #4CAF50;
+}
+
+[data-theme="dark"] .moderation-item--video {
+    border-color: #2196F3;
+}
+
+.moderation-item img,
+.moderation-item video {
     width: 100%;
     height: 220px;
     object-fit: cover;
     display: block;
+}
+
+.moderation-item video {
+    background: #000;
+}
+
+.moderation-video-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 64px;
+    height: 64px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2a5298;
+    font-size: 24px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.moderation-media-type {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
 }
 
 .moderation-item input[type="checkbox"] {
@@ -2197,6 +2273,17 @@ body.admin-menu-open {
     inset: 0;
     border: 3px solid var(--primary-color);
     pointer-events: none;
+    z-index: 1;
+}
+
+.moderation-item.selected.moderation-item--photo::after {
+    border-color: #4CAF50;
+    border-width: 4px;
+}
+
+.moderation-item.selected.moderation-item--video::after {
+    border-color: #2196F3;
+    border-width: 4px;
 }
 
 .moderation-meta {

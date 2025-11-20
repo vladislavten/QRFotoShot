@@ -29,12 +29,14 @@ function slugify(text) {
 }
 
 const uploadLimits = {
-    fileSize: 10 * 1024 * 1024 // 10MB
+    fileSize: 100 * 1024 * 1024 // 100MB для поддержки видео
 };
 
 function fileFilter(req, file, cb) {
     const isImage = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
-    cb(isImage ? null : new Error('Invalid file type'), isImage);
+    const isVideo = /^video\/(mp4|webm|quicktime|mov)$/.test(file.mimetype);
+    const isValid = isImage || isVideo;
+    cb(isValid ? null : new Error('Invalid file type. Only images (jpeg, png, gif, webp) and videos (mp4, webm, mov) are allowed.'), isValid);
 }
 
 function toPosixPath(parts) {
@@ -89,6 +91,15 @@ function getFileUrl(req, filename) {
 }
 
 async function generatePreviewForFile(file, uploadSubdir) {
+    // Определяем тип медиа по mimetype
+    const isVideo = /^video\//.test(file.mimetype);
+    
+    // Для видео не создаем превью (можно добавить thumbnail позже)
+    if (isVideo) {
+        return null;
+    }
+    
+    // Для фото создаем превью как раньше
     const ext = path.extname(file.filename) || '.jpg';
     const baseName = path.basename(file.filename, ext);
     const previewFileName = `${baseName}-preview.jpg`;
@@ -166,18 +177,25 @@ function performPhotoUpload({ req, res, eventId, eventRow, skipStatusCheck = fal
             filesWithPreviews = await Promise.all(
                 req.files.map(async (file) => {
                     const storedRelative = req.uploadSubdir ? `${req.uploadSubdir}/${file.filename}` : file.filename;
+                    const isVideo = /^video\//.test(file.mimetype);
+                    const mediaType = isVideo ? 'video' : 'photo';
                     let previewRelative = null;
-                    try {
-                        previewRelative = await generatePreviewForFile(file, req.uploadSubdir);
-                    } catch (previewErr) {
-                        // Если не удалось создать превью, продолжаем только с оригиналом
-                        previewRelative = null;
+                    
+                    // Для фото создаем превью, для видео - нет
+                    if (!isVideo) {
+                        try {
+                            previewRelative = await generatePreviewForFile(file, req.uploadSubdir);
+                        } catch (previewErr) {
+                            // Если не удалось создать превью, продолжаем только с оригиналом
+                            previewRelative = null;
+                        }
                     }
                     
                     return { 
                         file, 
                         storedRelative, 
-                        previewRelative
+                        previewRelative,
+                        mediaType
                     };
                 })
             );
@@ -195,7 +213,7 @@ function performPhotoUpload({ req, res, eventId, eventRow, skipStatusCheck = fal
             }
             const ownerId = eventOwnerRow?.owner_id || null;
 
-            const stmt = db.prepare(`INSERT INTO photos (event_id, filename, original_name, status, preview_filename) VALUES (?, ?, ?, ?, ?)`);
+            const stmt = db.prepare(`INSERT INTO photos (event_id, filename, original_name, status, preview_filename, media_type) VALUES (?, ?, ?, ?, ?, ?)`);
             const historyStmt = db.prepare(`INSERT INTO photo_uploads_history (event_id, photo_id, owner_id, uploaded_at) VALUES (?, ?, ?, datetime('now'))`);
             
             let insertedCount = 0;
@@ -203,8 +221,8 @@ function performPhotoUpload({ req, res, eventId, eventRow, skipStatusCheck = fal
             const files = [];
             
             db.serialize(() => {
-                filesWithPreviews.forEach(({ file, storedRelative, previewRelative }) => {
-                    stmt.run(eventId, storedRelative, file.originalname, initialStatus, previewRelative, function(insertErr) {
+                filesWithPreviews.forEach(({ file, storedRelative, previewRelative, mediaType }) => {
+                    stmt.run(eventId, storedRelative, file.originalname, initialStatus, previewRelative || null, mediaType, function(insertErr) {
                         if (insertErr) {
                             console.error('Error inserting photo:', insertErr);
                             errorCount++;
@@ -361,10 +379,22 @@ function getFileUrlWithFallback(req, filename) {
 router.get('/event/:eventId', (req, res) => {
     const eventId = parseInt(req.params.eventId, 10);
     const sort = req.query.sort === 'likes' ? 'likes' : 'date';
+    const mediaType = req.query.media_type || null; // 'photo' или 'video' или null (все)
     const orderClause = sort === 'likes'
         ? `ORDER BY likes DESC, uploaded_at DESC`
         : `ORDER BY uploaded_at DESC`;
-    db.all(`SELECT id, event_id, filename, original_name, status, likes, uploaded_at, preview_filename FROM photos WHERE event_id = ? AND status = 'approved' ${orderClause}`, [eventId], (err, rows) => {
+    
+    let query = `SELECT id, event_id, filename, original_name, status, likes, uploaded_at, preview_filename, media_type FROM photos WHERE event_id = ? AND status = 'approved'`;
+    const params = [eventId];
+    
+    if (mediaType) {
+        query += ` AND media_type = ?`;
+        params.push(mediaType);
+    }
+    
+    query += ` ${orderClause}`;
+    
+    db.all(query, params, (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -376,7 +406,8 @@ router.get('/event/:eventId', (req, res) => {
             return {
                 ...p,
                 url,
-                preview_url: previewUrl
+                preview_url: previewUrl,
+                media_type: p.media_type || 'photo' // По умолчанию 'photo' для старых записей
             };
         });
         res.json(withUrls);
@@ -402,14 +433,15 @@ router.get('/recent', (req, res) => {
 // List pending photos (moderation) for an event [protected]
 router.get('/event/:eventId/pending', auth, (req, res) => {
     const eventId = parseInt(req.params.eventId, 10);
-    db.all(`SELECT id, event_id, filename, original_name, status, likes, uploaded_at, preview_filename FROM photos WHERE event_id = ? AND status = 'pending' ORDER BY uploaded_at DESC`, [eventId], (err, rows) => {
+    db.all(`SELECT id, event_id, filename, original_name, status, likes, uploaded_at, preview_filename, media_type FROM photos WHERE event_id = ? AND status = 'pending' ORDER BY uploaded_at DESC`, [eventId], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
         const withUrls = rows.map(p => ({
             ...p,
             url: getFileUrl(req, p.filename),
-            preview_url: p.preview_filename ? getFileUrl(req, p.preview_filename) : getFileUrl(req, p.filename)
+            preview_url: p.preview_filename ? getFileUrl(req, p.preview_filename) : getFileUrl(req, p.filename),
+            media_type: p.media_type || 'photo' // По умолчанию 'photo' для старых записей
         }));
         res.json(withUrls);
     });
@@ -420,7 +452,10 @@ router.get('/pending/count', auth, (req, res) => {
     const isRoot = req.user && req.user.role === 'root';
     const params = [];
     let sql = `
-        SELECT p.event_id AS event_id, COUNT(*) AS total
+        SELECT p.event_id AS event_id, 
+               COUNT(*) AS total,
+               SUM(CASE WHEN p.media_type = 'video' THEN 1 ELSE 0 END) AS videos,
+               SUM(CASE WHEN p.media_type = 'photo' OR p.media_type IS NULL THEN 1 ELSE 0 END) AS photos
         FROM photos p
         JOIN events e ON e.id = p.event_id
         WHERE p.status = 'pending'
@@ -436,15 +471,21 @@ router.get('/pending/count', auth, (req, res) => {
             return res.status(500).json({ error: err.message });
         }
         let total = 0;
+        let totalPhotos = 0;
+        let totalVideos = 0;
         const byEvent = {};
         (rows || []).forEach((row) => {
             const count = Number(row?.total) || 0;
+            const photos = Number(row?.photos) || 0;
+            const videos = Number(row?.videos) || 0;
             total += count;
+            totalPhotos += photos;
+            totalVideos += videos;
             if (row?.event_id) {
-                byEvent[row.event_id] = count;
+                byEvent[row.event_id] = { total: count, photos, videos };
             }
         });
-        res.json({ total, byEvent });
+        res.json({ total, totalPhotos, totalVideos, byEvent });
     });
 });
 

@@ -298,16 +298,51 @@ function setBrandingLogoPreview(form, url) {
 }
 
 function openModerationPreview(index) {
-    if (!moderationModal || !moderationModalImage) return;
-    const photo = moderationState.photos[index];
-    if (!photo) return;
-    moderationModalImage.src = photo.url;
+    if (!moderationModal) return;
+    const item = moderationState.photos[index];
+    if (!item) return;
+    
+    const isVideo = item.media_type === 'video';
+    
+    // Скрываем/показываем соответствующие элементы
+    if (moderationModalImage) {
+        moderationModalImage.style.display = isVideo ? 'none' : 'block';
+        if (!isVideo) {
+            moderationModalImage.src = item.url;
+        } else {
+            moderationModalImage.src = '';
+        }
+    }
+    
+    if (moderationModalVideo) {
+        moderationModalVideo.style.display = isVideo ? 'block' : 'none';
+        if (isVideo) {
+            moderationModalVideo.src = item.url;
+            moderationModalVideo.load();
+            // Автоматически запускаем воспроизведение видео
+            moderationModalVideo.play().catch(() => {
+                // Игнорируем ошибки автовоспроизведения
+            });
+        } else {
+            moderationModalVideo.pause();
+            moderationModalVideo.src = '';
+        }
+    }
+    
     moderationModal.classList.add('open');
 }
 
 function closeModerationPreview() {
     if (moderationModal) moderationModal.classList.remove('open');
-    if (moderationModalImage) moderationModalImage.src = '';
+    if (moderationModalImage) {
+        moderationModalImage.src = '';
+        moderationModalImage.style.display = 'none';
+    }
+    if (moderationModalVideo) {
+        moderationModalVideo.pause();
+        moderationModalVideo.src = '';
+        moderationModalVideo.style.display = 'none';
+    }
 }
 
 function formatDateForInputValue(date) {
@@ -379,17 +414,33 @@ function setupCreateEventDatePicker() {
     };
 }
 
-function formatPendingCount(count) {
-    const value = Math.max(0, Number(count) || 0);
-    return `${value.toLocaleString('ru-RU')} фото`;
+function formatPendingCount(count, photosCount, videosCount) {
+    const photos = Math.max(0, Number(photosCount) || 0);
+    return `${photos.toLocaleString('ru-RU')} фото`;
 }
 
-function setModerationPendingIndicator(total) {
+function formatPendingVideosCount(videosCount) {
+    const videos = Math.max(0, Number(videosCount) || 0);
+    return `${videos.toLocaleString('ru-RU')} видео`;
+}
+
+function setModerationPendingIndicator(total, photosCount, videosCount) {
     const indicator = document.getElementById('moderationPendingIndicator');
-    if (!indicator) return;
-    const formatted = formatPendingCount(total);
-    indicator.textContent = formatted;
-    indicator.dataset.pendingTotal = String(Math.max(0, Number(total) || 0));
+    const videosIndicator = document.getElementById('moderationPendingVideosIndicator');
+    
+    if (indicator) {
+        const formatted = formatPendingCount(total, photosCount, videosCount);
+        indicator.textContent = formatted;
+        indicator.dataset.pendingTotal = String(Math.max(0, Number(total) || 0));
+        indicator.dataset.pendingPhotos = String(Math.max(0, Number(photosCount) || 0));
+    }
+    
+    if (videosIndicator) {
+        const videosFormatted = formatPendingVideosCount(videosCount);
+        videosIndicator.textContent = videosFormatted;
+        videosIndicator.style.display = 'inline-flex';
+        videosIndicator.dataset.pendingVideos = String(Math.max(0, Number(videosCount) || 0));
+    }
 }
 
 async function refreshModerationPendingCounts() {
@@ -405,7 +456,7 @@ async function refreshModerationPendingCounts() {
         });
 
         if (res.status === 401) {
-            setModerationPendingIndicator(moderationState.totalPending || 0);
+            setModerationPendingIndicator(moderationState.totalPending || 0, 0, 0);
             handleAuthError({ message: 'Требуется авторизация' });
             return;
         }
@@ -417,17 +468,33 @@ async function refreshModerationPendingCounts() {
         const data = await res.json().catch(() => ({}));
         const byEvent = data?.byEvent && typeof data.byEvent === 'object' ? data.byEvent : {};
         moderationState.pendingCounts = {};
+        let totalPhotos = 0;
+        let totalVideos = 0;
+        
         Object.entries(byEvent).forEach(([eventId, value]) => {
-            moderationState.pendingCounts[String(eventId)] = Number(value) || 0;
+            if (typeof value === 'object' && value !== null) {
+                moderationState.pendingCounts[String(eventId)] = Number(value.total) || 0;
+                totalPhotos += Number(value.photos) || 0;
+                totalVideos += Number(value.videos) || 0;
+            } else {
+                // Обратная совместимость со старым форматом
+                const count = Number(value) || 0;
+                moderationState.pendingCounts[String(eventId)] = count;
+                totalPhotos += count; // Предполагаем, что это фото
+            }
         });
+        
         moderationState.totalPending = Number(data?.total) || Object.values(moderationState.pendingCounts).reduce((sum, value) => sum + Number(value || 0), 0);
-        setModerationPendingIndicator(moderationState.totalPending);
+        // Используем данные с сервера, если они есть, иначе используем подсчитанные значения
+        const photosCount = Number(data?.totalPhotos) !== undefined ? Number(data.totalPhotos) : totalPhotos;
+        const videosCount = Number(data?.totalVideos) !== undefined ? Number(data.totalVideos) : totalVideos;
+        setModerationPendingIndicator(moderationState.totalPending, photosCount, videosCount);
     } catch (error) {
         if (typeof handleAuthError === 'function' && handleAuthError(error)) {
             return;
         }
         console.warn('Не удалось обновить количество фото на модерации', error);
-        setModerationPendingIndicator(moderationState.totalPending || 0);
+        setModerationPendingIndicator(moderationState.totalPending || 0, 0, 0);
     }
 }
 
@@ -588,12 +655,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     tension: 0.4,
                     fill: true,
                     backgroundColor: 'rgba(42, 82, 152, 0.1)'
+                }, {
+                    label: 'Загрузки видео',
+                    data: [],
+                    borderColor: '#e74c3c',
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: 'rgba(231, 76, 60, 0.1)'
                 }]
             },
             options: {
                 responsive: true,
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true },
                     tooltip: { mode: 'index' }
                 },
                 scales: {
@@ -1157,6 +1231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     moderationModal = document.getElementById('moderationModal');
     moderationModalImage = document.getElementById('moderationModalImage');
+    moderationModalVideo = document.getElementById('moderationModalVideo');
     if (moderationModal) {
         const closeBtn = moderationModal.querySelector('.close-modal');
         if (closeBtn) closeBtn.addEventListener('click', closeModerationPreview);
@@ -1868,11 +1943,29 @@ function formatBytesToMB(bytes) {
     return `${bytes} Б`;
 }
 
+function formatBytesToGB(bytes) {
+    if (!bytes || isNaN(bytes)) return '0 ГБ';
+    const gb = bytes / (1024 * 1024 * 1024);
+    if (gb >= 1) {
+        return `${gb.toFixed(2)} ГБ`;
+    }
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1) {
+        return `${mb.toFixed(1)} МБ`;
+    }
+    const kb = bytes / 1024;
+    if (kb >= 1) {
+        return `${kb.toFixed(1)} КБ`;
+    }
+    return `${bytes} Б`;
+}
+
 async function loadAnalyticsSummary() {
     const totalPhotosEl = document.getElementById('analyticsTotalPhotos');
+    const totalVideosEl = document.getElementById('analyticsTotalVideos');
     const totalSizeEl = document.getElementById('analyticsTotalSize');
     const totalEventsEl = document.getElementById('analyticsTotalEvents');
-    if (!totalPhotosEl && !totalSizeEl && !totalEventsEl) return;
+    if (!totalPhotosEl && !totalVideosEl && !totalSizeEl && !totalEventsEl) return;
     try {
         const token = await ensureAdminToken();
         const res = await fetch(`${API_CONFIG.baseUrl}/analytics/summary`, {
@@ -1881,8 +1974,9 @@ async function loadAnalyticsSummary() {
         if (!res.ok) return;
         const data = await res.json();
         if (totalPhotosEl) totalPhotosEl.textContent = data?.totalPhotos ?? 0;
+        if (totalVideosEl) totalVideosEl.textContent = data?.totalVideos ?? 0;
         if (totalEventsEl) totalEventsEl.textContent = data?.totalEvents ?? 0;
-        if (totalSizeEl) totalSizeEl.textContent = formatBytesToMB(data?.totalSizeBytes || 0);
+        if (totalSizeEl) totalSizeEl.textContent = formatBytesToGB(data?.totalSizeBytes || 0);
     } catch (_) {
         // ignore
     }
@@ -1905,9 +1999,11 @@ async function loadUploadsAnalytics() {
                 return item.day;
             }
         });
-        const counts = (data || []).map(item => item?.total || 0);
+        const photoCounts = (data || []).map(item => item?.photos || 0);
+        const videoCounts = (data || []).map(item => item?.videos || 0);
         uploadsChart.data.labels = labels;
-        uploadsChart.data.datasets[0].data = counts;
+        uploadsChart.data.datasets[0].data = photoCounts;
+        uploadsChart.data.datasets[1].data = videoCounts;
         uploadsChart.update();
     } catch (_) {
         // ignore errors
@@ -2106,7 +2202,7 @@ function setupModeration(events) {
         moderationState.currentEventId = null;
         moderationState.photos = [];
         moderationContainer.innerHTML = '<div class="moderation-empty">Нет мероприятий для модерации</div>';
-        setModerationPendingIndicator(0);
+        setModerationPendingIndicator(0, 0, 0);
         return;
     }
 
@@ -2161,19 +2257,21 @@ function setupModeration(events) {
     });
 
     approveBtn.addEventListener('click', () => {
+        const { photosCount, videosCount, message } = getSelectedMediaCounts();
         openModerationConfirmModal({
             action: 'approve',
-            title: 'Одобрить выбранные фото',
-            message: `Одобрить ${moderationState.selected.size} фото?`,
+            title: 'Одобрить выбранные',
+            message: `Одобрить ${message}?`,
             confirmText: 'Одобрить',
             confirmClass: 'confirm-approve'
         });
     });
     rejectBtn.addEventListener('click', () => {
+        const { photosCount, videosCount, message } = getSelectedMediaCounts();
         openModerationConfirmModal({
             action: 'reject',
-            title: 'Отклонить выбранные фото',
-            message: `Отклонить ${moderationState.selected.size} фото?`,
+            title: 'Отклонить выбранные',
+            message: `Отклонить ${message}?`,
             confirmText: 'Отклонить',
             confirmClass: 'confirm-reject'
         });
@@ -2252,10 +2350,9 @@ async function loadPendingPhotosForCurrent() {
         }
         moderationState.photos = Array.isArray(data) ? data : [];
         moderationState.selected.clear();
-        moderationState.pendingCounts = moderationState.pendingCounts || {};
-        moderationState.pendingCounts[String(eventId)] = moderationState.photos.length;
-        moderationState.totalPending = Object.values(moderationState.pendingCounts).reduce((sum, value) => sum + Number(value || 0), 0);
-        setModerationPendingIndicator(moderationState.totalPending);
+        
+        // Обновляем счетчики через API для получения общего количества по всем мероприятиям
+        await refreshModerationPendingCounts();
         renderModerationPhotos();
     } catch (error) {
         moderationState.photos = [];
@@ -2271,19 +2368,30 @@ function renderModerationPhotos() {
     if (!photosContainer) return;
 
     if (!moderationState.photos.length) {
-        photosContainer.innerHTML = '<div class="moderation-empty">Нет фотографий на модерации</div>';
+        photosContainer.innerHTML = '<div class="moderation-empty">Нет фотографий и видео на модерации</div>';
         updateModerationActions();
         return;
     }
 
-    photosContainer.innerHTML = moderationState.photos.map((photo, index) => {
-        const selected = moderationState.selected.has(photo.id);
-        const uploadedAt = photo.uploaded_at ? new Date(photo.uploaded_at).toLocaleString() : '';
+    photosContainer.innerHTML = moderationState.photos.map((item, index) => {
+        const selected = moderationState.selected.has(item.id);
+        const uploadedAt = item.uploaded_at ? new Date(item.uploaded_at).toLocaleString() : '';
+        const isVideo = item.media_type === 'video';
+        const mediaTypeLabel = isVideo ? 'Видео' : 'Фото';
+        
         return `
-            <div class="moderation-item ${selected ? 'selected' : ''}" data-index="${index}">
-                <input type="checkbox" class="moderation-checkbox" data-photo-id="${photo.id}" ${selected ? 'checked' : ''} />
-                <img src="${photo.url}" alt="Фото ${index + 1}" class="moderation-thumb">
+            <div class="moderation-item ${selected ? 'selected' : ''} ${isVideo ? 'moderation-item--video' : 'moderation-item--photo'}" data-index="${index}" data-media-type="${isVideo ? 'video' : 'photo'}">
+                <input type="checkbox" class="moderation-checkbox" data-photo-id="${item.id}" ${selected ? 'checked' : ''} />
+                <div class="moderation-media-badge">
+                    <i class="fas ${isVideo ? 'fa-video' : 'fa-image'}"></i>
+                </div>
+                ${isVideo ? `
+                    <video src="${item.url}" class="moderation-thumb" preload="metadata" muted></video>
+                ` : `
+                    <img src="${item.url}" alt="${mediaTypeLabel} ${index + 1}" class="moderation-thumb">
+                `}
                 <div class="moderation-meta">
+                    <small class="moderation-media-type">${mediaTypeLabel}</small>
                     ${uploadedAt ? `<small>${uploadedAt}</small>` : ''}
                     <button type="button" class="preview-btn" data-index="${index}">Просмотр</button>
                 </div>
@@ -2292,6 +2400,42 @@ function renderModerationPhotos() {
     }).join('');
 
     updateModerationActions();
+}
+
+function getSelectedMediaCounts() {
+    const selectedIds = Array.from(moderationState.selected);
+    let photosCount = 0;
+    let videosCount = 0;
+    
+    selectedIds.forEach(id => {
+        const item = moderationState.photos.find(p => p.id === id);
+        if (item) {
+            if (item.media_type === 'video') {
+                videosCount++;
+            } else {
+                photosCount++;
+            }
+        }
+    });
+    
+    const parts = [];
+    if (photosCount > 0) {
+        parts.push(`${photosCount} фото`);
+    }
+    if (videosCount > 0) {
+        parts.push(`${videosCount} видео`);
+    }
+    
+    let message = '';
+    if (parts.length === 0) {
+        message = '0 фото';
+    } else if (parts.length === 1) {
+        message = parts[0];
+    } else {
+        message = parts.join(' и ');
+    }
+    
+    return { photosCount, videosCount, message };
 }
 
 function updateModerationActions() {
@@ -2326,11 +2470,15 @@ async function moderateSelected(action) {
         if (action === 'reject') {
             moderationState.photos = moderationState.photos.filter(p => !ids.includes(p.id));
             renderModerationPhotos();
-            refreshModerationPendingCounts();
         }
+        // Обновляем счетчики по всем мероприятиям после одобрения или отклонения
+        await refreshModerationPendingCounts();
         await loadEvents();
         // Reload pending photos to ensure consistency
         if (action === 'reject') {
+            loadPendingPhotosForCurrent();
+        } else {
+            // После одобрения также обновляем список
             loadPendingPhotosForCurrent();
         }
     } catch (error) {
