@@ -116,7 +116,10 @@ function buildLogoPaths(eventId, eventName, createdAt) {
 function getUploadsUrl(req, relativePath) {
     if (!relativePath) return '';
     const clean = String(relativePath).replace(/^\/+/, '');
-    return `${req.protocol}://${req.get('host')}/uploads/${clean}`;
+    // Получаем протокол из заголовка X-Forwarded-Proto (от Nginx) или из req.protocol
+    const protocol = req.get('X-Forwarded-Proto') || req.protocol || 'https';
+    const host = req.get('X-Forwarded-Host') || req.get('host') || 'qrshot.kz';
+    return `${protocol}://${host}/uploads/${clean}`;
 }
 
 function attachBrandingUrl(req, row) {

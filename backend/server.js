@@ -8,6 +8,9 @@ const telegramNotifier = require('./services/telegramNotifier');
 
 const app = express();
 
+// ВАЖНО: Доверяем заголовкам от Nginx reverse proxy (для правильного определения протокола HTTPS)
+app.set('trust proxy', true);
+
 // Middleware
 app.use(cors());
 app.use(express.json());

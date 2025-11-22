@@ -383,8 +383,26 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        # Отключаем кэширование для uploads
-        proxy_set_header Cache-Control "no-store, no-cache, must-revalidate";
+        # ВАЖНО: Сохраняем оригинальные заголовки от Express (включая Content-Type)
+        # Это позволяет Express правильно определять MIME type для изображений
+        proxy_pass_header Content-Type;
+        proxy_ignore_headers Cache-Control Expires;
+        
+        # Отключаем кэширование для uploads (устанавливаем заголовки после получения ответа)
+        proxy_hide_header Cache-Control;
+        proxy_hide_header Expires;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, private" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+        
+        # Включаем буферизацию для больших файлов
+        proxy_buffering off;
+        proxy_request_buffering off;
+        
+        # Увеличиваем таймауты для больших файлов (видео, высококачественные фото)
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
     }
 
     # HTML файлы фронтенда
@@ -544,8 +562,26 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        # Отключаем кэширование для uploads
-        proxy_set_header Cache-Control "no-store, no-cache, must-revalidate";
+        # ВАЖНО: Сохраняем оригинальные заголовки от Express (включая Content-Type)
+        # Это позволяет Express правильно определять MIME type для изображений
+        proxy_pass_header Content-Type;
+        proxy_ignore_headers Cache-Control Expires;
+        
+        # Отключаем кэширование для uploads (устанавливаем заголовки после получения ответа)
+        proxy_hide_header Cache-Control;
+        proxy_hide_header Expires;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, private" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+        
+        # Включаем буферизацию для больших файлов
+        proxy_buffering off;
+        proxy_request_buffering off;
+        
+        # Увеличиваем таймауты для больших файлов (видео, высококачественные фото)
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
     }
 
     # HTML файлы фронтенда
@@ -1089,7 +1125,7 @@ node server.js
 ```bash
 # Перезапускаем приложение через PM2
 cd /var/www/qrshot/backend
-pm2 start server.js --name qrshot
+pm2 start server.js --name qrshot   #старт сервера на проде
 
 # Или если используете ecosystem.config.js
 pm2 start ecosystem.config.js

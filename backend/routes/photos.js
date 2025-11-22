@@ -86,7 +86,11 @@ function createUploadMiddleware(eventId, eventName, requireModeration, createdAt
 }
 
 function getFileUrl(req, filename) {
-    const origin = `${req.protocol}://${req.get('host')}`;
+    // Получаем протокол из заголовка X-Forwarded-Proto (от Nginx) или из req.protocol
+    // Это важно для работы за reverse proxy (Nginx) в продакшене
+    const protocol = req.get('X-Forwarded-Proto') || req.protocol || 'https';
+    const host = req.get('X-Forwarded-Host') || req.get('host') || 'qrshot.kz';
+    const origin = `${protocol}://${host}`;
     return `${origin}/uploads/${filename}`;
 }
 
@@ -187,6 +191,7 @@ function performPhotoUpload({ req, res, eventId, eventRow, skipStatusCheck = fal
                             previewRelative = await generatePreviewForFile(file, req.uploadSubdir);
                         } catch (previewErr) {
                             // Если не удалось создать превью, продолжаем только с оригиналом
+                            console.error('[Preview Generation Error]', previewErr.message || previewErr, 'File:', file.filename);
                             previewRelative = null;
                         }
                     }
@@ -375,6 +380,19 @@ function getFileUrlWithFallback(req, filename) {
     return getFileUrl(req, filename);
 }
 
+// Вспомогательная функция для логирования URL (для отладки)
+function logUrlGeneration(filename, previewFilename, url, previewUrl) {
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[URL Generation]', {
+            filename,
+            previewFilename,
+            url,
+            previewUrl,
+            hasPreview: !!previewFilename
+        });
+    }
+}
+
 // List photos by event
 router.get('/event/:eventId', (req, res) => {
     const eventId = parseInt(req.params.eventId, 10);
@@ -400,9 +418,24 @@ router.get('/event/:eventId', (req, res) => {
         }
         const withUrls = rows.map(p => {
             const url = getFileUrlWithFallback(req, p.filename);
-            const previewUrl = p.preview_filename 
-                ? getFileUrlWithFallback(req, p.preview_filename) 
-                : url;
+            // ВАЖНО: Используем preview_filename если он есть, иначе fallback на оригинал
+            let previewUrl = url; // По умолчанию используем оригинал
+            
+            if (p.preview_filename) {
+                // Проверяем, существует ли файл превью
+                const previewPath = path.join(uploadsDir, p.preview_filename);
+                if (fs.existsSync(previewPath)) {
+                    previewUrl = getFileUrlWithFallback(req, p.preview_filename);
+                } else {
+                    // Если превью не существует, логируем и используем оригинал
+                    console.warn(`[Gallery API] Preview file not found: ${p.preview_filename}, using original for photo ID: ${p.id}`);
+                    previewUrl = url;
+                }
+            } else {
+                // Если preview_filename отсутствует в базе, логируем
+                console.warn(`[Gallery API] No preview_filename in database for photo ID: ${p.id}, filename: ${p.filename}`);
+            }
+            
             return {
                 ...p,
                 url,

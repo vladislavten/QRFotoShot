@@ -85,7 +85,7 @@ async function sendNotification(username, eventName, pendingCount, threshold) {
     
     // Получаем адрес сайта из переменной окружения
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const adminLink = `${frontendUrl}/admin#moderation-tab`;
+    const adminLink = `${frontendUrl}/admin.html#moderation-tab`;
     
     const message = `⚠️ Внимание! Модерация фото\n\n` +
                    `Событие: ${eventName}\n` +
